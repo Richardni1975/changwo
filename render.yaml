@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: changwo
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node relay.js
+    envVars:
+      - key: NODE_ENV
+        value: production
