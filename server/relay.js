@@ -49,7 +49,10 @@ const server = http.createServer((req, res) => {
     const mimeMap = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon' };
     try {
       const content = fs.readFileSync(filePath);
-      res.writeHead(200, { 'Content-Type': mimeMap[ext] || 'application/octet-stream', 'Cache-Control': PROD ? 'public, max-age=86400' : 'no-cache' });
+      const cacheCtrl = ext === '.html'
+        ? 'no-cache, no-store, must-revalidate'
+        : (PROD ? 'public, max-age=86400' : 'no-cache');
+      res.writeHead(200, { 'Content-Type': mimeMap[ext] || 'application/octet-stream', 'Cache-Control': cacheCtrl });
       res.end(content);
     } catch { res.writeHead(404); res.end('Not found'); }
     return;
