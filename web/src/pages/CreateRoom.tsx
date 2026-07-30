@@ -14,7 +14,6 @@ export function CreateRoom({ onCreated }: CreateRoomProps) {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
   const hostname = window.location.hostname;
-  const port = window.location.port || '3000';
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
 
   useEffect(() => {
@@ -46,20 +45,21 @@ export function CreateRoom({ onCreated }: CreateRoomProps) {
       </div>
 
       {/* 入口提示 */}
-      <div className="w-full max-w-sm mb-6 p-3 rounded-xl bg-surface-card border border-white/10 text-center space-y-1">
-        <p className="text-[10px] text-text-muted">
-          电脑端入口：<span className="text-brand-primary font-mono select-all">http://{hostname}:{port}</span>
-        </p>
-        {isLocal ? (
+      {isLocal ? (
+        <div className="w-full max-w-sm mb-6 p-3 rounded-xl bg-surface-card border border-white/10 text-center space-y-1">
           <p className="text-[10px] text-text-muted">
-            手机端入口：<span className="text-amber-300 font-mono">http://192.168.xx.xx:{port}</span>
+            电脑端入口：<span className="text-brand-primary font-mono select-all">http://{hostname}:3000</span>
           </p>
-        ) : (
           <p className="text-[10px] text-text-muted">
-            手机端入口：<span className="text-brand-primary font-mono select-all">http://{hostname}:{port}</span>
+            手机端入口：<span className="text-amber-300 font-mono">http://192.168.xx.xx:3000</span>
           </p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="w-full max-w-sm mb-6 p-3 rounded-xl bg-surface-card border border-white/10 text-center">
+          <p className="text-[11px] text-text-muted">登录地址</p>
+          <p className="text-sm font-mono text-brand-primary select-all">https://changwo.m0m0n1.top</p>
+        </div>
+      )}
 
       {/* 创建房间 */}
       <button
