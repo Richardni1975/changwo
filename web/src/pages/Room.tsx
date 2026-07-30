@@ -37,19 +37,10 @@ function downloadFile(url: string, filename: string) {
       a.click();
       URL.revokeObjectURL(a.href);
     })
-    .catch(() => { openInNewTab(url); });
+    .catch(() => { window.open(url, '_blank'); });
 }
 
 /** 在系统级新窗口打开链接（手机/电脑均可靠，不覆盖当前页面） */
-function openInNewTab(url: string) {
-  const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => document.body.removeChild(a), 100);
-}
 
 // 自动适配：用当前页面地址的主机名，不再写死 127.0.0.1
 // 开发环境：分端口（Vite :3000 + Relay :8080）；生产环境：同源（Relay 同时服务静态文件）
@@ -506,20 +497,18 @@ export function Room({ roomId, onBack }: RoomProps) {
                       return (
                     <div className="pb-1 space-y-1">
                       {isMine ? (
-                        /* 自己发的：纯展示 */
                         <span className="inline-flex items-center gap-2 text-sm text-text-muted">
                           <span className="text-xl">📄</span><span>{fname}</span>
                         </span>
                       ) : (
-                        /* 别人发的：可查看/下载 */
                         <>
-                          <span onClick={() => openInNewTab(fullUrl)}
-                            className="cursor-pointer inline-flex items-center gap-2 text-sm text-brand-primary hover:text-brand-primary-hover">
+                          <a href={fullUrl} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-brand-primary hover:text-brand-primary-hover">
                             <span className="text-xl">📄</span><span className="underline">{fname}</span>
-                          </span>
+                          </a>
                           <div className="flex gap-2">
-                            <span onClick={() => openInNewTab(fullUrl)} className="cursor-pointer text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</span>
-                            <button onClick={() => downloadFile(fullUrl, fname)} className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</button>
+                            <a href={fullUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</a>
+                            <a href={fullUrl} download className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</a>
                           </div>
                         </>
                       )}
