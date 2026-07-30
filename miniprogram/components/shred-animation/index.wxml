@@ -1,0 +1,11 @@
+<!-- 碎纸化动画组件 -->
+<view class="shred-container" wx:if="{{animating}}">
+  <view
+    wx:for="{{particles}}"
+    wx:key="id"
+    class="shred-particle"
+    style="--drift-x: {{item.driftX}}px; --drift-y: {{item.driftY}}px; --drift-rotate: {{item.driftRotate}}deg; color: {{item.color}}; animation-delay: {{item.delay}}ms;"
+  >
+    {{item.char}}
+  </view>
+</view>

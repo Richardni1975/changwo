@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/create/index",
+    "pages/room/index",
+    "pages/history/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#0F0F23",
+    "navigationBarTitleText": "畅吾欲言",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0F0F23",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

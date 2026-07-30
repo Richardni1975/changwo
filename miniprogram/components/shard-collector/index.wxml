@@ -1,0 +1,7 @@
+<!-- 碎片收集态指示器 -->
+<view class="shard-collector">
+  <view class="shard-dots">
+    <view class="shard-dot" wx:for="{{[1,2,3,4]}}" wx:key="*this" />
+  </view>
+  <text class="collecting-label">收集中...</text>
+</view>

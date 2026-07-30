@@ -1,0 +1,41 @@
+/* 碎片收集态组件样式 */
+
+.shard-collector {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.shard-dots {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.shard-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  animation: dot-blink 0.6s ease-in-out infinite alternate;
+}
+
+.shard-dot:nth-child(1) { background-color: #6366F1; animation-delay: 0s; }
+.shard-dot:nth-child(2) { background-color: #8B5CF6; animation-delay: 0.15s; }
+.shard-dot:nth-child(3) { background-color: #EC4899; animation-delay: 0.3s; }
+.shard-dot:nth-child(4) { background-color: #F59E0B; animation-delay: 0.45s; }
+
+@keyframes dot-blink {
+  0% { opacity: 0.3; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
+.collecting-label {
+  font-size: 24rpx;
+  color: var(--color-text-muted);
+  animation: label-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes label-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

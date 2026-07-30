@@ -1,0 +1,25 @@
+{
+  "name": "changwo-relay-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "畅吾欲言 — WebSocket 中转服务",
+  "main": "relay.js",
+  "scripts": {
+    "start": "node relay.js",
+    "dev": "node --watch relay.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.7",
+    "@types/ws": "^8.5.10"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

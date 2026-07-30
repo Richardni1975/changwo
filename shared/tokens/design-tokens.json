@@ -1,0 +1,75 @@
+{
+  "color": {
+    "brand": {
+      "primary": "#6366F1",
+      "primaryHover": "#818CF8",
+      "secondary": "#8B5CF6",
+      "secondaryHover": "#A78BFA"
+    },
+    "surface": {
+      "bg": "#0F0F23",
+      "bgAlt": "#1A1A2E",
+      "card": "rgba(255,255,255,0.05)",
+      "cardHover": "rgba(255,255,255,0.08)",
+      "overlay": "rgba(0,0,0,0.6)"
+    },
+    "text": {
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "muted": "#64748B",
+      "inverse": "#0F172A"
+    },
+    "status": {
+      "success": "#22C55E",
+      "warning": "#F59E0B",
+      "error": "#EF4444",
+      "info": "#3B82F6"
+    },
+    "shard": {
+      "fragment1": "#6366F1",
+      "fragment2": "#8B5CF6",
+      "fragment3": "#EC4899",
+      "fragment4": "#F59E0B"
+    }
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "16px",
+    "lg": "24px",
+    "xl": "32px",
+    "2xl": "48px",
+    "3xl": "64px"
+  },
+  "radius": {
+    "sm": "6px",
+    "md": "12px",
+    "lg": "20px",
+    "full": "9999px"
+  },
+  "animation": {
+    "shred": "600ms",
+    "assemble": "800ms",
+    "presence": "300ms",
+    "easing": {
+      "shred": "cubic-bezier(0.4, 0, 0.2, 1)",
+      "assemble": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      "presence": "cubic-bezier(0.4, 0, 0.2, 1)"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": "'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+      "mono": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace"
+    },
+    "fontSize": {
+      "xs": "12px",
+      "sm": "14px",
+      "base": "16px",
+      "lg": "18px",
+      "xl": "20px",
+      "2xl": "24px",
+      "3xl": "30px"
+    }
+  }
+}

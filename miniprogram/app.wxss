@@ -1,0 +1,148 @@
+/**
+ * 畅吾欲言 小程序 — 全局样式
+ *
+ * 安全红线：本文件不包含任何用户追踪或指纹采集代码。
+ */
+
+/* ─── Design Token 变量 ──────────────────────── */
+page {
+  --color-brand-primary: #6366F1;
+  --color-brand-secondary: #8B5CF6;
+  --color-surface-bg: #0F0F23;
+  --color-surface-card: rgba(255, 255, 255, 0.05);
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  --color-status-success: #22C55E;
+  --color-status-warning: #F59E0B;
+  --color-status-error: #EF4444;
+
+  --anim-shred: 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  --anim-assemble: 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* 基础 */
+  background-color: var(--color-surface-bg);
+  color: var(--color-text-primary);
+  font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+  font-size: 28rpx;
+  line-height: 1.6;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* ─── 碎片收集态 ──────────────────────────────── */
+.shard-collecting {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.shard-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+}
+
+.shard-dot:nth-child(1) { background-color: #6366F1; }
+.shard-dot:nth-child(2) { background-color: #8B5CF6; }
+.shard-dot:nth-child(3) { background-color: #EC4899; }
+.shard-dot:nth-child(4) { background-color: #F59E0B; }
+
+/* ─── 合体动画 ────────────────────────────────── */
+.assembling {
+  animation: assemble 800ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes assemble {
+  0% {
+    opacity: 0;
+    transform: translateY(16rpx) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ─── 低帧率模式降级 ─────────────────────────── */
+.low-fps-mode .shred-particle {
+  display: none;
+}
+
+.low-fps-mode .assembling {
+  animation: none;
+  opacity: 1;
+}
+
+/* ─── 通用工具类 ──────────────────────────────── */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── 消息气泡 ──────────────────────────────── */
+.message-bubble {
+  max-width: 85%;
+  padding: 20rpx 28rpx;
+  border-radius: 24rpx;
+  background: var(--color-surface-card);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  word-break: break-all;
+}
+
+.message-time {
+  font-size: 22rpx;
+  color: var(--color-text-muted);
+  margin-top: 8rpx;
+}
+
+/* ─── 按钮 ────────────────────────────────────── */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx 48rpx;
+  border-radius: 100rpx;
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 600;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:active {
+  opacity: 0.8;
+}
+
+.btn-primary[disabled] {
+  opacity: 0.3;
+}
+
+/* ─── 输入框 ──────────────────────────────────── */
+.input-field {
+  flex: 1;
+  padding: 20rpx 28rpx;
+  border-radius: 100rpx;
+  background: var(--color-surface-card);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  font-size: 28rpx;
+}
+
+.input-field::placeholder {
+  color: var(--color-text-muted);
+}

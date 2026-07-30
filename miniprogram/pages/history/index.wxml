@@ -1,0 +1,30 @@
+<!-- 畅吾欲言 — 历史记录 & 导出页 -->
+<view class="page-container">
+  <view class="header">
+    <text class="title">历史记录</text>
+    <text class="subtitle">仅保留 7 天内的解密消息</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{messages.length === 0}}">
+    <text class="empty-icon">📭</text>
+    <text class="empty-text">暂无历史记录</text>
+    <text class="empty-hint">进入房间参与讨论后，消息会出现在这里</text>
+  </view>
+
+  <!-- 消息列表 -->
+  <scroll-view class="history-list" scroll-y wx:else>
+    <view wx:for="{{messages}}" wx:key="serverTs" class="history-item">
+      <text class="history-time">{{item.timeStr}}</text>
+      <view class="message-bubble">
+        <text>{{item.text}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 底部操作栏 -->
+  <view class="action-bar" wx:if="{{messages.length > 0}}">
+    <button class="btn-primary" bindtap="onExport">一键导出 TXT</button>
+    <text class="record-count">共 {{messages.length}} 条记录</text>
+  </view>
+</view>

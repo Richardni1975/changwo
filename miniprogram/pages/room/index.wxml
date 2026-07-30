@@ -1,0 +1,67 @@
+<!-- 畅吾欲言 — 房间页 -->
+<view class="page-container">
+
+  <!-- 满员提示 -->
+  <view class="room-full-overlay" wx:if="{{roomFull}}">
+    <text class="room-full-icon">🚫</text>
+    <text class="room-full-title">房间已满</text>
+    <text class="room-full-desc">当前房间已达到 50 人上限</text>
+    <button class="btn-primary" bindtap="onBack">返回</button>
+  </view>
+
+  <!-- 正常房间视图 -->
+  <block wx:else>
+    <!-- 顶部栏 -->
+    <view class="top-bar">
+      <text class="back-btn" bindtap="onBack">← 退出</text>
+      <view class="room-info">
+        <text class="room-id">房间 {{roomIdShort}}</text>
+        <text class="online-count">{{connected ? '🟢' : '🔴'}} {{onlineCount}}/50 在线</text>
+      </view>
+      <text class="export-btn" bindtap="onExport">{{exporting ? '导出中' : '导出'}}</text>
+    </view>
+
+    <!-- 消息列表（scroll-view 代替虚拟列表） -->
+    <scroll-view
+      class="message-list"
+      scroll-y
+      scroll-into-view="{{lastMessageId}}"
+      scroll-with-animation
+    >
+      <view
+        wx:for="{{messages}}"
+        wx:key="id"
+        id="msg-{{item.id}}"
+        class="message-item"
+      >
+        <!-- 收集态 -->
+        <view wx:if="{{item.status === 'collecting'}}" class="shard-collecting">
+          <view class="shard-dot" wx:for="{{[1,2,3,4]}}" wx:key="*this" />
+          <text class="collecting-text">收集中...</text>
+        </view>
+
+        <!-- 解密完成 -->
+        <view wx:else class="message-ready">
+          <view class="message-bubble">
+            <text>{{item.text}}</text>
+          </view>
+          <text class="message-time">{{item.timeStr}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 输入栏 -->
+    <view class="input-bar">
+      <input
+        class="input-field"
+        value="{{inputText}}"
+        placeholder="输入消息（发送前将在本地碎片化）..."
+        bindinput="onInput"
+        bindconfirm="onSend"
+        confirm-type="send"
+        adjust-position
+      />
+      <button class="send-btn" bindtap="onSend" disabled="{{!inputText}}">发送</button>
+    </view>
+  </block>
+</view>

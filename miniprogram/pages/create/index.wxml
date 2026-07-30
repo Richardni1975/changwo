@@ -1,0 +1,24 @@
+<!-- 畅吾欲言 — 创建房间页 -->
+<view class="page-container">
+  <!-- Logo & 标题 -->
+  <view class="hero-section">
+    <text class="hero-icon">🦋</text>
+    <text class="hero-title">畅吾欲言</text>
+    <text class="hero-subtitle">熟人匿名沟通 · 集体决策</text>
+  </view>
+
+  <!-- 核心卖点 -->
+  <view class="feature-grid">
+    <view class="feature-card" wx:for="{{features}}" wx:key="label">
+      <text class="feature-icon">{{item.icon}}</text>
+      <text class="feature-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <!-- 创建按钮 -->
+  <button class="btn-primary create-btn" bindtap="onCreateRoom" disabled="{{creating}}">
+    {{creating ? '正在创建房间...' : '创建匿名房间'}}
+  </button>
+
+  <text class="disclaimer">创建即代表同意：所有消息 7 天后自动清除</text>
+</view>

@@ -1,0 +1,33 @@
+/* 碎纸化动画组件样式 */
+
+.shred-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 100;
+}
+
+.shred-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 28rpx;
+  font-weight: 600;
+  animation: shred-fly 600ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes shred-fly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift-x, 20px), var(--drift-y, -40px))
+      scale(0.3) rotate(var(--drift-rotate, 180deg));
+  }
+}
