@@ -49,10 +49,15 @@ const server = http.createServer((req, res) => {
     const mimeMap = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon' };
     try {
       const content = fs.readFileSync(filePath);
+      // Vite 打包的 JS/CSS 文件名自带 content hash，永远不会变，可缓存一年
       const cacheCtrl = ext === '.html'
         ? 'no-cache, no-store, must-revalidate'
-        : (PROD ? 'public, max-age=86400' : 'no-cache');
-      res.writeHead(200, { 'Content-Type': mimeMap[ext] || 'application/octet-stream', 'Cache-Control': cacheCtrl });
+        : (PROD ? 'public, max-age=31536000, immutable' : 'no-cache');
+      res.writeHead(200, {
+        'Content-Type': mimeMap[ext] || 'application/octet-stream',
+        'Cache-Control': cacheCtrl,
+        'CDN-Cache-Control': cacheCtrl,  // Cloudflare 专用
+      });
       res.end(content);
     } catch { res.writeHead(404); res.end('Not found'); }
     return;
@@ -85,12 +90,15 @@ const server = http.createServer((req, res) => {
     const file = getFile(filename);
     if (!file) { res.writeHead(404); res.end('Not found'); return; }
     const isThumb = filename.includes('_thumb');
+    // 上传文件一旦存储就不会变，加 immutable 让 Cloudflare 长期缓存
+    const cacheCtrl = isThumb
+      ? 'public, max-age=604800, immutable'         // 缩略图 7 天
+      : 'public, max-age=86400, immutable';         // 原图 1 天（不变）
     res.writeHead(200, {
       'Content-Type': file.mimeType,
       'Content-Disposition': `inline; filename="${encodeURIComponent(file.originalName)}"`,
-      'Cache-Control': isThumb
-        ? 'public, max-age=604800, immutable'   // 缩略图 7 天缓存，永不变化
-        : 'public, max-age=86400',               // 原图 1 天缓存
+      'Cache-Control': cacheCtrl,
+      'CDN-Cache-Control': cacheCtrl,               // Cloudflare 专用
       'ETag': `"${filename}"`,
     });
     require('fs').createReadStream(file.filepath).pipe(res);
