@@ -7,6 +7,7 @@ import { FpsMonitor } from '../components/FpsMonitor';
 import { VoiceInput } from '../components/VoiceInput';
 import { ImageViewer } from '../components/ImageViewer';
 import { QrModal } from '../components/QrModal';
+import { FilePanel } from '../components/FilePanel';
 import type { WireMessage, ShardPayload } from '../utils/protocol';
 import { assembleShards, shredText } from '../utils/crypto';
 
@@ -102,6 +103,7 @@ export function Room({ roomId, onBack }: RoomProps) {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [viewImage, setViewImage] = useState<string | null>(null);
+  const [filePanel, setFilePanel] = useState<{ url: string; name: string } | null>(null);
 
   const msgListRef = useRef<HTMLDivElement>(null);
   // 本设备已表态的消息：messageId → 'up' | 'down'（每消息只能点一次）
@@ -525,9 +527,9 @@ export function Room({ roomId, onBack }: RoomProps) {
                             <span className="text-xl">📄</span><span>{fname}</span>
                           </span>
                           <div className="flex gap-2">
-                            <button onClick={() => window.open(fullUrl, '_blank')}
+                            <button onClick={() => setFilePanel({ url: fullUrl, name: fname })}
                               className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</button>
-                            <button onClick={() => downloadFile(fullUrl, fname)}
+                            <button onClick={() => setFilePanel({ url: fullUrl, name: fname })}
                               className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</button>
                           </div>
                         </>
@@ -584,6 +586,7 @@ export function Room({ roomId, onBack }: RoomProps) {
       </div>
       {viewImage && <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />}
       {showQr && <QrModal roomId={roomId} onClose={() => setShowQr(false)} />}
+      {filePanel && <FilePanel url={filePanel.url} name={filePanel.name} onClose={() => setFilePanel(null)} />}
     </div>
   );
 }
