@@ -502,10 +502,7 @@ export function Room({ roomId, onBack }: RoomProps) {
                             onClick={() => setViewImage(fileUrl(img.full))}
                             className="max-w-[240px] max-h-[240px] rounded-lg object-cover border border-white/10 hover:border-white/30 transition-colors cursor-pointer" />
                           {onlineCount > THUMB_THRESHOLD && <p className="text-[9px] text-text-muted">📶 缩略图 ({onlineCount}人在线) · 点看原图</p>}
-                          <div className="flex gap-2">
-                            <button onClick={() => setViewImage(fileUrl(img.full))} className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</button>
-                            <button onClick={() => downloadFile(fileUrl(img.full), decodeURIComponent(msg.text.split('/').pop()?.split('?')[0] || 'download'))} className="text-[10px] text-text-muted hover:text-text-secondary">💾 保存</button>
-                          </div>
+                          <button onClick={() => setViewImage(fileUrl(img.full))} className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</button>
                         </>
                       )}
                     </div>); })()
