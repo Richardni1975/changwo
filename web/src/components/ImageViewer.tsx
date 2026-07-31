@@ -11,6 +11,8 @@ interface ImageViewerProps {
 
 export function ImageViewer({ src, alt, onClose }: ImageViewerProps) {
   const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
+  const [copied, setCopied] = useState(false);
+  const isWechat = /MicroMessenger/i.test(navigator.userAgent);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -31,11 +33,18 @@ export function ImageViewer({ src, alt, onClose }: ImageViewerProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
       setStatus('done');
-      setTimeout(() => setStatus('idle'), 2000);
+      setTimeout(() => setStatus('idle'), 3000);
     } catch {
       setStatus('error');
-      setTimeout(() => setStatus('idle'), 2000);
+      setTimeout(() => setStatus('idle'), 3000);
     }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(src).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
   };
 
   return (
@@ -47,12 +56,19 @@ export function ImageViewer({ src, alt, onClose }: ImageViewerProps) {
         className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg"
         onClick={(e) => e.stopPropagation()} />
 
-      <button onClick={handleSave} disabled={status === 'saving'}
-        onClickCapture={(e) => e.stopPropagation()}
-        className={`absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-xl text-white text-sm transition-all
-          ${status === 'done' ? 'bg-green-500/80' : status === 'error' ? 'bg-red-500/80' : 'bg-white/10 hover:bg-white/20'}`}>
-        {status === 'saving' ? '⏳ 保存中...' : status === 'done' ? '✅ 已保存到下载目录' : status === 'error' ? '❌ 保存失败，请重试' : '💾 下载到本地'}
-      </button>
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+        <button onClick={handleSave} disabled={status === 'saving'}
+          className={`px-5 py-2.5 rounded-xl text-white text-sm transition-all
+            ${status === 'done' ? 'bg-green-500/80' : status === 'error' ? 'bg-red-500/80' : 'bg-white/10 hover:bg-white/20'}`}>
+          {status === 'saving' ? '⏳ 保存中...' : status === 'done' ? '✅ 已保存' : status === 'error' ? '❌ 失败，点此重试' : '💾 下载到本地'}
+        </button>
+
+        {/* 手机/微信：额外显示复制链接按钮 */}
+        <button onClick={handleCopy}
+          className="sm:hidden px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs transition-all">
+          {copied ? '✓ 链接已复制' : '📋 复制链接（在浏览器打开下载）'}
+        </button>
+      </div>
     </div>
   );
 }
