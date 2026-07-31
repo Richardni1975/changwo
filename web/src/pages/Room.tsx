@@ -526,12 +526,8 @@ export function Room({ roomId, onBack }: RoomProps) {
                           <span className="inline-flex items-center gap-2 text-sm text-text-secondary">
                             <span className="text-xl">📄</span><span>{fname}</span>
                           </span>
-                          <div className="flex gap-2">
-                            <button onClick={() => setFilePanel({ url: fullUrl, name: fname })}
-                              className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</button>
-                            <button onClick={() => setFilePanel({ url: fullUrl, name: fname })}
-                              className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</button>
-                          </div>
+                          <button onClick={() => setFilePanel({ url: fullUrl, name: fname })}
+                            className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</button>
                         </>
                       )}
                     </div>); })()
