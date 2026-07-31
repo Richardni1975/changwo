@@ -14,29 +14,40 @@
  * - 7 天到期物理删除，不可恢复
  */
 
-function createRecordKeeper({ retentionHours = 168 } = {}) {
-  const retentionMs = retentionHours * 60 * 60 * 1000;
+// VIP 房间号列表（有效期 4 个月 ≈ 2880 小时）
+const VIP_ROOMS = new Set([
+  '1111','3333','5555','7777','9999','0827','0723','0220','0722','0227',
+  '1111','1007','1314','0707','0520','1414','2007','1975','1999','1221',
+  '1234','2017','2005','2013','1974',
+]);
 
+const VIP_RETENTION_HOURS = 2880;  // 4 个月
+const NORMAL_RETENTION_HOURS = 24;  // 24 小时
+
+function createRecordKeeper({ defaultRetentionHours = 24 } = {}) {
   // room → [{ text, serverTs, messageId }]
   const records = new Map();
 
+  function getRetentionHours(room) {
+    return VIP_ROOMS.has(room) ? VIP_RETENTION_HOURS : NORMAL_RETENTION_HOURS;
+  }
+
   // 每小时执行一次过期清理
   const cleanupTimer = setInterval(() => {
-    const cutoff = Date.now() - retentionMs;
     let totalCleaned = 0;
     for (const [room, msgs] of records) {
+      const hours = getRetentionHours(room);
+      const cutoff = Date.now() - hours * 60 * 60 * 1000;
       const before = msgs.length;
-      // 保留 cutoff 之后的消息
       const filtered = msgs.filter((m) => m.serverTs > cutoff);
       records.set(room, filtered);
       totalCleaned += before - filtered.length;
     }
-    // 清理空房间
     for (const [room, msgs] of records) {
       if (msgs.length === 0) records.delete(room);
     }
     if (totalCleaned > 0) {
-      console.log(`[record] 过期清理: ${totalCleaned} 条记录`);
+      console.log(`[record] 过期清理: ${totalCleaned} 条`);
     }
   }, 60 * 60 * 1000);
 
