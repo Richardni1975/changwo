@@ -42,9 +42,14 @@ const server = http.createServer((req, res) => {
 
   // 静态文件服务（前端网页）
   if (req.method === 'GET' && !req.url.startsWith('/upload') && !req.url.startsWith('/files/')) {
-    let filePath = path.join(STATIC_DIR, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
-    // SPA fallback：所有非 API 路径返回 index.html
-    if (!fs.existsSync(filePath)) filePath = path.join(STATIC_DIR, 'index.html');
+    const urlPath = req.url.split('?')[0]; // 去掉 query 参数
+    let filePath = (urlPath === '/' || urlPath === '')
+      ? path.join(STATIC_DIR, 'index.html')
+      : path.join(STATIC_DIR, urlPath);
+    // SPA fallback：目录或不存在的路径返回 index.html
+    try {
+      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) filePath = path.join(STATIC_DIR, 'index.html');
+    } catch { filePath = path.join(STATIC_DIR, 'index.html'); }
     const ext = path.extname(filePath);
     const mimeMap = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon' };
     try {
