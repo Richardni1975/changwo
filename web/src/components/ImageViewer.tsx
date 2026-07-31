@@ -51,7 +51,7 @@ export function ImageViewer({ src, alt, onClose }: ImageViewerProps) {
         onClickCapture={(e) => e.stopPropagation()}
         className={`absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-xl text-white text-sm transition-all
           ${status === 'done' ? 'bg-green-500/80' : status === 'error' ? 'bg-red-500/80' : 'bg-white/10 hover:bg-white/20'}`}>
-        {status === 'saving' ? '⏳ 保存中...' : status === 'done' ? '✅ 已保存到下载目录' : status === 'error' ? '❌ 保存失败，请重试' : '💾 保存到手机'}
+        {status === 'saving' ? '⏳ 保存中...' : status === 'done' ? '✅ 已保存到下载目录' : status === 'error' ? '❌ 保存失败，请重试' : '💾 下载到本地'}
       </button>
     </div>
   );
