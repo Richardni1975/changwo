@@ -369,6 +369,22 @@ export function Room({ roomId, onBack }: RoomProps) {
 
   useEffect(() => { const el = msgListRef.current; if (el) el.scrollTop = el.scrollHeight; }, [messages]);
 
+  // 关闭标签页/浏览器时提醒（但主动点退出时先移除避免重复弹窗）
+  const unloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    unloadRef.current = handler;
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  const handleQuit = () => {
+    if (confirm('确定要退出聊天房间吗？')) {
+      if (unloadRef.current) window.removeEventListener('beforeunload', unloadRef.current);
+      onBack();
+    }
+  };
+
   // ─── 满员 ────────────────────────────────
 
   if (roomFull) {
@@ -406,7 +422,7 @@ export function Room({ roomId, onBack }: RoomProps) {
 
       {/* 顶部栏 */}
       <header className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/5 backdrop-blur-sm">
-        <button onClick={onBack} className="text-text-secondary hover:text-text-primary text-sm">← 退出</button>
+        <button onClick={handleQuit} className="text-text-secondary hover:text-text-primary text-sm">← 退出</button>
         <div className="text-center">
           <p className="text-[10px] text-text-muted">房间号</p>
           <p className="text-lg font-bold font-mono text-amber-400 tracking-widest">{roomId}</p>
@@ -509,9 +525,9 @@ export function Room({ roomId, onBack }: RoomProps) {
                             <span className="text-xl">📄</span><span>{fname}</span>
                           </span>
                           <div className="flex gap-2">
-                            <button onClick={() => { if (confirm('此操作将在新页面打开文件，是否继续？')) window.open(fullUrl, '_blank'); }}
+                            <button onClick={() => window.open(fullUrl, '_blank')}
                               className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</button>
-                            <button onClick={() => { if (confirm('此操作将下载文件，是否继续？')) downloadFile(fullUrl, fname); }}
+                            <button onClick={() => downloadFile(fullUrl, fname)}
                               className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</button>
                           </div>
                         </>
