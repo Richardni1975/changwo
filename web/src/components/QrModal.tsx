@@ -13,7 +13,7 @@ export function QrModal({ roomId, onClose }: QrModalProps) {
   const hostname = window.location.hostname;
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
   const baseUrl = isLocal ? `http://${hostname}:3000` : 'https://changwo.m0m0n1.top';
-  const fullUrl = `${baseUrl}?join=${encodeURIComponent(roomId)}`;
+  const fullUrl = baseUrl;
 
   useEffect(() => {
     if (!canvasRef.current) return;
