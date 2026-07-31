@@ -1,6 +1,6 @@
 /**
  * FilePanel — 文件操作弹窗（不离开聊天页面）
- * 手机端微信浏览器不支持多标签页，用此面板替代 window.open()
+ * 微信不支持多标签页，此处仅提供"下载"和"复制链接"
  */
 import { useState } from 'react';
 
@@ -25,14 +25,16 @@ export function FilePanel({ url, name, onClose }: FilePanelProps) {
     setDownloading(true);
     try {
       const res = await fetch(url);
+      if (!res.ok) throw new Error('download failed');
       const blob = await res.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = name;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
     } catch {
-      // fallback: 复制链接
       handleCopy();
     }
     setDownloading(false);
@@ -47,15 +49,9 @@ export function FilePanel({ url, name, onClose }: FilePanelProps) {
         </div>
 
         <div className="space-y-3">
-          <button onClick={() => window.open(url, '_blank')}
-            className="w-full py-2.5 rounded-xl bg-brand-primary/10 border border-brand-primary/20
-                       text-sm text-brand-primary hover:bg-brand-primary/20 transition-colors">
-            🔍 在新页面查看
-          </button>
-
           <button onClick={handleDownload} disabled={downloading}
-            className="w-full py-2.5 rounded-xl bg-surface-card border border-white/10
-                       text-sm text-text-secondary hover:text-text-primary transition-colors
+            className="w-full py-3 rounded-xl bg-brand-primary/10 border border-brand-primary/20
+                       text-sm text-brand-primary hover:bg-brand-primary/20 transition-colors
                        disabled:opacity-50">
             {downloading ? '下载中...' : '💾 下载到本地'}
           </button>
@@ -65,12 +61,12 @@ export function FilePanel({ url, name, onClose }: FilePanelProps) {
               className="flex-1 px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-xs text-text-muted font-mono truncate" />
             <button onClick={handleCopy}
               className="shrink-0 px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-xs text-text-secondary hover:text-text-primary transition-colors">
-              {copied ? '✓' : '复制'}
+              {copied ? '✓ 已复制' : '复制链接'}
             </button>
           </div>
 
           <p className="text-[10px] text-text-muted text-center">
-            微信内点击"在新页面查看"将用系统浏览器打开，聊天不会中断
+            下载后可在手机文件管理中找到；或复制链接在系统浏览器中打开查看
           </p>
         </div>
       </div>
