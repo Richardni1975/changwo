@@ -6,6 +6,7 @@ import { ShardCollector } from '../components/ShardCollector';
 import { FpsMonitor } from '../components/FpsMonitor';
 import { VoiceInput } from '../components/VoiceInput';
 import { ImageViewer } from '../components/ImageViewer';
+import { QrModal } from '../components/QrModal';
 import type { WireMessage, ShardPayload } from '../utils/protocol';
 import { assembleShards, shredText } from '../utils/crypto';
 
@@ -99,6 +100,7 @@ export function Room({ roomId, onBack }: RoomProps) {
   const [mode, setMode] = useState<ChatMode>('momo');
   const [uploading, setUploading] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [viewImage, setViewImage] = useState<string | null>(null);
 
   const msgListRef = useRef<HTMLDivElement>(null);
@@ -417,6 +419,7 @@ export function Room({ roomId, onBack }: RoomProps) {
             }`}
             title={mode === 'momo' ? '当前：匿名模式（XOR加密分片，身份不可追踪）' : '当前：直传模式（不加密，身份清晰）'}
           >{mode === 'momo' ? '🛡 匿名' : '📝 直传'}</button>
+          <button onClick={() => setShowQr(true)} className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-secondary" title="二维码">📱</button>
           <button onClick={() => setShowLeaderboard(!showLeaderboard)}
             className={`text-xs px-2 py-1 rounded transition-colors ${showLeaderboard ? 'bg-amber-500/20 text-amber-300' : 'text-text-muted hover:text-text-secondary'}`}>🏆</button>
           <button onClick={handleExport} disabled={exporting} className="text-xs text-brand-primary hover:text-brand-primary-hover">{exporting ? '...' : '导出'}</button>
@@ -563,6 +566,7 @@ export function Room({ roomId, onBack }: RoomProps) {
         {isFull && <p className="text-[10px] text-status-warning mt-1.5 text-center">⚠️ 房间已满员 (50/50)</p>}
       </div>
       {viewImage && <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />}
+      {showQr && <QrModal roomId={roomId} onClose={() => setShowQr(false)} />}
     </div>
   );
 }
