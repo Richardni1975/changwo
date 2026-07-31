@@ -505,13 +505,14 @@ export function Room({ roomId, onBack }: RoomProps) {
                         </span>
                       ) : (
                         <>
-                          <a href={fullUrl} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-sm text-brand-primary hover:text-brand-primary-hover">
-                            <span className="text-xl">📄</span><span className="underline">{fname}</span>
-                          </a>
+                          <span className="inline-flex items-center gap-2 text-sm text-text-secondary">
+                            <span className="text-xl">📄</span><span>{fname}</span>
+                          </span>
                           <div className="flex gap-2">
-                            <a href={fullUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</a>
-                            <a href={fullUrl} download className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</a>
+                            <button onClick={() => { if (confirm('此操作将在新页面打开文件，是否继续？')) window.open(fullUrl, '_blank'); }}
+                              className="text-[10px] text-text-muted hover:text-text-secondary">🔍 查看</button>
+                            <button onClick={() => { if (confirm('此操作将下载文件，是否继续？')) downloadFile(fullUrl, fname); }}
+                              className="text-[10px] text-text-muted hover:text-text-secondary">💾 下载</button>
                           </div>
                         </>
                       )}
