@@ -238,11 +238,12 @@ io.on('connection', (socket) => {
 
   // ─── 断开 ──────────────────────────
   socket.on('disconnect', () => {
-    if (sessionToken) {
-      const s = sessions.get(sessionToken);
-      if (s) s.alive = false;
+    if (currentRoom && sessionToken) {
+      capacityGuard.leave(currentRoom, sessionToken);
+      sessions.delete(sessionToken);
+      io.to(currentRoom).emit('presence', { onlineCount: capacityGuard.getOnlineCount(currentRoom) });
     }
-    console.log(`[disconnect] ${socket.id}`);
+    console.log(`[disconnect] ${socket.id} room=${currentRoom}`);
   });
 });
 
