@@ -1,7 +1,7 @@
 /**
  * QrModal — 显示房间 QR 码，手机扫码直接加入
  */
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface QrModalProps {
   roomId: string;
@@ -10,10 +10,21 @@ interface QrModalProps {
 
 export function QrModal({ roomId, onClose }: QrModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [saved, setSaved] = useState(false);
   const hostname = window.location.hostname;
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
   const baseUrl = isLocal ? `http://${hostname}:3000` : 'https://changwo.m0m0n1.top';
   const fullUrl = baseUrl;
+
+  const handleSaveQr = () => {
+    if (!canvasRef.current) return;
+    const a = document.createElement('a');
+    a.href = canvasRef.current.toDataURL('image/png');
+    a.download = `changwo-room-${roomId}.png`;
+    a.click();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -39,8 +50,12 @@ export function QrModal({ roomId, onClose }: QrModalProps) {
           </div>
         )}
 
-        <div className="flex justify-center mb-3">
+        <div className="flex flex-col items-center mb-3">
           <canvas ref={canvasRef} className="rounded-lg bg-white p-2" />
+          <button onClick={handleSaveQr}
+            className="mt-2 px-4 py-1.5 rounded-lg bg-surface-card border border-white/10 text-xs text-text-secondary hover:text-text-primary transition-colors">
+            {saved ? '✅ 已保存' : '📥 保存二维码'}
+          </button>
         </div>
 
         <div className="text-center space-y-1 border-t border-white/5 pt-3">
