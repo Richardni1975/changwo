@@ -1,6 +1,6 @@
 /**
  * FilePanel — 文件操作弹窗（不离开聊天页面）
- * 微信不支持多标签页，此处仅提供"下载"和"复制链接"
+ * 微信不支持程序化下载，引导用户复制链接用系统浏览器打开
  */
 import { useState } from 'react';
 
@@ -12,20 +12,22 @@ interface FilePanelProps {
 
 export function FilePanel({ url, name, onClose }: FilePanelProps) {
   const [copied, setCopied] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(url).then(() => {
+  const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.origin + url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
   };
 
   const handleDownload = async () => {
-    setDownloading(true);
+    setStatus('saving');
     try {
       const res = await fetch(url);
-      if (!res.ok) throw new Error('download failed');
+      if (!res.ok) throw new Error('fetch failed');
       const blob = await res.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -34,10 +36,14 @@ export function FilePanel({ url, name, onClose }: FilePanelProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
+      setStatus('done');
+      setTimeout(() => setStatus('idle'), 3000);
     } catch {
-      handleCopy();
+      // 下载失败 → 自动复制链接
+      handleCopyLink();
+      setStatus('error');
+      setTimeout(() => setStatus('idle'), 3000);
     }
-    setDownloading(false);
   };
 
   return (
@@ -49,24 +55,40 @@ export function FilePanel({ url, name, onClose }: FilePanelProps) {
         </div>
 
         <div className="space-y-3">
-          <button onClick={handleDownload} disabled={downloading}
-            className="w-full py-3 rounded-xl bg-brand-primary/10 border border-brand-primary/20
-                       text-sm text-brand-primary hover:bg-brand-primary/20 transition-colors
-                       disabled:opacity-50">
-            {downloading ? '下载中...' : '💾 下载到本地'}
-          </button>
+          {isWechat && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <p className="text-[11px] text-amber-300 leading-relaxed">
+                ⚠️ 微信内无法直接下载文件。请点击下方"复制链接"，然后粘贴到手机系统浏览器（如 Chrome、Safari）中打开即可下载。
+              </p>
+            </div>
+          )}
+
+          {!isWechat && (
+            <button onClick={handleDownload} disabled={status === 'saving'}
+              className={`w-full py-3 rounded-xl text-sm transition-all
+                ${status === 'done' ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                : status === 'error' ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                : 'bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/20'}`}>
+              {status === 'saving' ? '⏳ 下载中...'
+                : status === 'done' ? '✅ 下载完成（查看手机 Download 文件夹）'
+                : status === 'error' ? '❌ 下载失败，已自动复制链接'
+                : '💾 下载到本地'}
+            </button>
+          )}
 
           <div className="flex items-center gap-2">
-            <input type="text" value={url} readOnly
+            <input type="text" value={window.location.origin + url} readOnly
               className="flex-1 px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-xs text-text-muted font-mono truncate" />
-            <button onClick={handleCopy}
+            <button onClick={handleCopyLink}
               className="shrink-0 px-3 py-2 rounded-lg bg-surface-card border border-white/10 text-xs text-text-secondary hover:text-text-primary transition-colors">
-              {copied ? '✓ 已复制' : '复制链接'}
+              {copied ? '✓' : '复制'}
             </button>
           </div>
 
           <p className="text-[10px] text-text-muted text-center">
-            下载后可在手机文件管理中找到；或复制链接在系统浏览器中打开查看
+            {isWechat
+              ? '复制链接 → 打开系统浏览器 → 粘贴 → 下载'
+              : '下载后可在手机"文件管理 → Download"中查看'}
           </p>
         </div>
       </div>
