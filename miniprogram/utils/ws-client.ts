@@ -75,8 +75,11 @@ export class WsClient {
 
     this.ws.onMessage((res) => {
       try {
-        const msg: WireMessage = JSON.parse(res.data as string);
-        this.handleMessage(msg);
+        const raw = JSON.parse(res.data as string);
+        if (!raw || typeof raw !== 'object') return;
+        // 规范化：与 Web 端 useWebSocket 保持一致，把除 type 外的顶层字段收进 payload
+        const { type, ...rest } = raw;
+        this.handleMessage({ type: type || '', payload: rest, serverTs: raw.serverTs });
       } catch {
         console.error('[ws] 消息解析失败');
       }
@@ -94,7 +97,7 @@ export class WsClient {
     });
   }
 
-  send(msg: Partial<WireMessage>) {
+  send(msg: Record<string, unknown>) {
     this.ws?.send({
       data: JSON.stringify(msg),
       fail: (err) => console.error('[ws] 发送失败:', err.errMsg),
@@ -111,10 +114,10 @@ export class WsClient {
 
   // ─── 私有方法 ────────────────────────────
 
-  private handleMessage(msg: WireMessage) {
+  private handleMessage(msg: { type: string; payload: Record<string, unknown>; serverTs?: number }) {
     switch (msg.type) {
       case 'join':
-        this.sessionToken = msg.sessionToken || null;
+        this.sessionToken = (msg.payload.sessionToken as string) || null;
         // 持久化 sessionToken 以供重连
         if (this.sessionToken) {
           wx.setStorageSync('changwo_sessionToken', this.sessionToken);
@@ -127,7 +130,7 @@ export class WsClient {
         break;
 
       case 'presence':
-        this.opts.onPresence?.(msg.payload?.onlineCount as number ?? 0);
+        this.opts.onPresence?.(Number(msg.payload.onlineCount) || 0);
         break;
 
       case 'pong':
@@ -135,7 +138,7 @@ export class WsClient {
         break;
 
       default:
-        this.opts.onMessage(msg);
+        this.opts.onMessage(msg as unknown as WireMessage);
     }
   }
 

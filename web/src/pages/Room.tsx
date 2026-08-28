@@ -104,6 +104,8 @@ export function Room({ roomId, onBack }: RoomProps) {
   const [showQr, setShowQr] = useState(false);
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [filePanel, setFilePanel] = useState<{ url: string; name: string } | null>(null);
+  const [myName, setMyName] = useState<string>(() => { try { return localStorage.getItem('changwo_displayName') || ''; } catch { return ''; } });
+  const [showNameInput, setShowNameInput] = useState(false);
 
   const msgListRef = useRef<HTMLDivElement>(null);
   // 本设备已表态的消息：messageId → 'up' | 'down'（每消息只能点一次）
@@ -131,6 +133,13 @@ export function Room({ roomId, onBack }: RoomProps) {
     nextSpeakerIndex.current++;
     map.set(senderTag, label);
     return label;
+  };
+
+  // 保存署名（本地持久化，仅直传模式随消息附带）
+  const saveName = (value: string) => {
+    const v = value.trim().slice(0, 20);
+    setMyName(v);
+    try { if (v) localStorage.setItem('changwo_displayName', v); else localStorage.removeItem('changwo_displayName'); } catch {}
   };
 
   // ─── 消息处理（分模式处理身份）──────────────
@@ -187,7 +196,7 @@ export function Room({ roomId, onBack }: RoomProps) {
 
       // ── plain 直传消息（非匿名，身份清晰）──
       case 'message': {
-        const { messageId, kind, content, senderTag, fileUrl, thumbUrl } = msg.payload as any;
+        const { messageId, kind, content, senderTag, fileUrl, thumbUrl, displayName: senderName } = msg.payload as any;
         if (assembledIds.has(messageId)) break;
         assembledIds.add(messageId);
         const displayKind: DisplayMessage['kind'] = kind === 'image' ? 'image' : kind === 'file' ? 'file' : 'text';
@@ -195,7 +204,8 @@ export function Room({ roomId, onBack }: RoomProps) {
         const displayText = (kind === 'image' || kind === 'file')
           ? JSON.stringify({ fileUrl: fileUrl || content, thumbUrl: thumbUrl || fileUrl || content, fileName: (msg.payload as any)?.fileName || content })
           : content;
-        const displayName = getSenderLabel(senderTag || '');
+        // 别人若填了署名则显示真名；否则退回系统分配的发言人标签；自己恒显「我」
+        const displayName = (senderTag !== mySenderTag.current && senderName) ? senderName : getSenderLabel(senderTag || '');
         setMessages((prev) => [...prev.filter((m) => m.id !== messageId), {
           id: messageId, text: displayText, serverTs: msg.serverTs || Date.now(),
           status: 'ready', kind: displayKind, displayName, thumbsUp: 0, thumbsDown: 0,
@@ -278,7 +288,7 @@ export function Room({ roomId, onBack }: RoomProps) {
       const messageId = crypto.randomUUID();
       myMsgIdsRef.current.add(messageId);
       assembledIdsRef.current.add(messageId);
-      send('message', { messageId, kind: 'text', content: text, senderTag: mySenderTag.current });
+      send('message', { messageId, kind: 'text', content: text, senderTag: mySenderTag.current, displayName: myName || undefined });
       setMessages((prev) => [...prev, { id: messageId, text, serverTs: Date.now(),
         status: 'ready', kind: 'text' as const, displayName: '我', thumbsUp: 0, thumbsDown: 0 }]);
     }
@@ -341,14 +351,14 @@ export function Room({ roomId, onBack }: RoomProps) {
       } else {
         assembledIdsRef.current.add(messageId);
         const imgJson = JSON.stringify({ fileUrl: fileRefUrl, thumbUrl: thumbRefUrl, fileName: info.originalName });
-        send('message', { messageId, kind, content: info.originalName,
-          senderTag: mySenderTag.current, fileUrl: fileRefUrl, thumbUrl: thumbRefUrl, fileName: info.originalName, fileSize: info.size, mimeType: info.mimeType });
+        send('message', { messageId, kind, content: info.originalName, senderTag: mySenderTag.current,
+          fileUrl: fileRefUrl, thumbUrl: thumbRefUrl, fileName: info.originalName, fileSize: info.size, mimeType: info.mimeType, displayName: myName || undefined });
         setMessages((prev) => [...prev, { id: messageId, text: imgJson, serverTs: Date.now(),
           status: 'ready', kind: kind as DisplayMessage['kind'], displayName: '我', thumbsUp: 0, thumbsDown: 0 }]);
       }
     } catch (err: any) { alert('上传失败: ' + (err.message || '未知错误')); }
     setUploading(false);
-  }, [mode, roomId]);
+  }, [mode, roomId, myName]);
 
   // ─── 内存治理（6 小时长会话保障）────────────────
   // 消息数组硬上限 500 条，超过截断到 250 条
@@ -437,12 +447,30 @@ export function Room({ roomId, onBack }: RoomProps) {
             }`}
             title={mode === 'momo' ? '当前：匿名模式（XOR加密分片，身份不可追踪）' : '当前：直传模式（不加密，身份清晰）'}
           >{mode === 'momo' ? '🛡 匿名' : '📝 直传'}</button>
+          <button onClick={() => setShowNameInput(v => !v)}
+            className={`text-xs px-2 py-1 rounded-lg border transition-all ${myName ? 'border-brand-primary/40 text-brand-primary bg-brand-primary/10' : 'border-white/10 text-text-muted hover:text-text-secondary'}`}
+            title={myName ? `署名：${myName}（仅直传模式显示）` : '输入真实名字（仅直传模式显示）'}>
+            {myName ? `✏️ ${myName}` : '✏️ 署名'}
+          </button>
           <button onClick={() => setShowQr(true)} className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-secondary" title="二维码">📱</button>
           <button onClick={() => setShowLeaderboard(!showLeaderboard)}
             className={`text-xs px-2 py-1 rounded transition-colors ${showLeaderboard ? 'bg-amber-500/20 text-amber-300' : 'text-text-muted hover:text-text-secondary'}`}>🏆</button>
           <button onClick={handleExport} disabled={exporting} className="text-xs text-brand-primary hover:text-brand-primary-hover">{exporting ? '...' : '导出'}</button>
         </div>
       </header>
+
+      {/* 署名输入（仅直传模式生效） */}
+      {showNameInput && (
+        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-surface-alt">
+          <span className="text-xs text-text-secondary shrink-0">署名</span>
+          <input autoFocus type="text" value={myName} onChange={(e) => saveName(e.target.value)}
+            onBlur={() => setShowNameInput(false)}
+            onKeyDown={(e) => { if (e.key === 'Enter') setShowNameInput(false); }}
+            placeholder="输入真实名字（仅直传模式显示）"
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-surface-card border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary/50" />
+          {myName && <button onClick={() => saveName('')} className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-secondary shrink-0">清除</button>}
+        </div>
+      )}
 
       {/* 高赞排行榜 */}
       {showLeaderboard && (

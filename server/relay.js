@@ -19,6 +19,7 @@ const { createCapacityGuard } = require('./capacity-guard');
 const { createShardBucket } = require('./shard-bucket');
 const { createRecordKeeper } = require('./record-keeper');
 const { saveFile, getFile } = require('./file-store');
+const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = process.env.PORT || 8080;
 const PROD = process.env.NODE_ENV === 'production';
@@ -113,143 +114,200 @@ const server = http.createServer((req, res) => {
   res.writeHead(404); res.end();
 });
 
-// ─── Socket.IO ────────────────────────────────────
+// ─── WebSocket 双通道（Socket.IO + 原生 /ws）────────────────
 
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
-  pingInterval: 15000,    // 15s 心跳（客户端自动）
+  pingInterval: 15000,    // 15s 心跳（Socket.IO 客户端自动）
   pingTimeout: 30000,     // 30s 超时判定僵尸
   connectTimeout: 10000,
   transports: ['websocket', 'polling'],  // WebSocket 优先，HTTP 轮询降级
 });
 
-// sessionToken → { socket, room, joinedAt }
+const wss = new WebSocketServer({ noServer: true });
+
+// /ws 路径 → 原生 WebSocket（微信小程序用）；/socket.io → 交给 Socket.IO；其余拒绝
+server.on('upgrade', (req, socket, head) => {
+  const pathname = new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname;
+  if (pathname === '/ws') {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  } else if (!pathname.startsWith('/socket.io')) {
+    socket.destroy();
+  }
+});
+
+// sessionToken → conn（重连复用槽位）
 const sessions = new Map();
+// 统一房间连接注册表：Socket.IO 与原生 WS 都登记于此，广播时一视同仁
+const roomConns = new Map();   // room -> Set<conn>
+let connSeq = 0;
 
-io.on('connection', (socket) => {
-  console.log(`[connect] ${socket.id}`);
+// conn = { id, io?, ws?, room, sessionToken }
+function sendTo(conn, type, data) {
+  if (conn.io) conn.io.emit(type, data);
+  else if (conn.ws && conn.ws.readyState === WebSocket.OPEN) conn.ws.send(JSON.stringify({ type, ...data }));
+}
 
-  let currentRoom = null;
-  let sessionToken = null;
+function broadcastRoom(room, type, data) {
+  const set = roomConns.get(room);
+  if (!set) return;
+  for (const c of set) sendTo(c, type, data);
+}
 
-  // ─── 加入房间 ──────────────────────
-  socket.on('join', (msg) => {
-    const room = msg.room;
-    if (!room) {
-      socket.emit('error', { code: 'MISSING_ROOM' }); return;
-    }
+function registerConn(conn) {
+  if (!roomConns.has(conn.room)) roomConns.set(conn.room, new Set());
+  roomConns.get(conn.room).add(conn);
+}
 
-    // 重连检查
-    if (msg.sessionToken && sessions.has(msg.sessionToken)) {
-      const existing = sessions.get(msg.sessionToken);
-      if (existing.room === room) {
-        sessionToken = msg.sessionToken;
-        currentRoom = room;
-        existing.socket = socket;
-        socket.join(room);
-        socket.emit('join', { sessionToken, room, serverTs: Date.now() });
-        const missed = recordKeeper.getMessagesSince(room, msg.lastMsgServerTs || 0);
-        missed.forEach((m) => socket.emit(m.type, m));
-        return;
-      }
-    }
+function unregisterConn(conn) {
+  const set = roomConns.get(conn.room);
+  if (set) { set.delete(conn); if (set.size === 0) roomConns.delete(conn.room); }
+}
 
-    // 容量检查
-    if (!capacityGuard.canJoin(room)) {
-      socket.emit('room_full', { code: 'ROOM_CAPACITY_EXCEEDED', message: '房间已满（50人上限）' });
+// ─── 共享业务逻辑（传输无关）────────────────
+
+function handleJoin(conn, msg) {
+  const room = msg.room;
+  if (!room) { sendTo(conn, 'error', { code: 'MISSING_ROOM' }); return; }
+
+  // 重连：同一 sessionToken + 同一房间 → 复用既有槽位
+  if (msg.sessionToken && sessions.has(msg.sessionToken)) {
+    const old = sessions.get(msg.sessionToken);
+    if (old.room === room) {
+      unregisterConn(old);
+      old.room = null; old.sessionToken = null; // 旧连接稍后 disconnect 时不再二次减员
+      conn.room = room;
+      conn.sessionToken = msg.sessionToken;
+      sessions.set(msg.sessionToken, conn);
+      registerConn(conn);
+      sendTo(conn, 'join', { sessionToken: msg.sessionToken, room, serverTs: Date.now() });
+      const missed = recordKeeper.getMessagesSince(room, msg.lastMsgServerTs || 0);
+      missed.forEach((m) => sendTo(conn, m.type, { ...m.payload, serverTs: m.serverTs }));
       return;
     }
+  }
 
-    sessionToken = capacityGuard.join(room);
-    currentRoom = room;
-    sessions.set(sessionToken, { socket, room, joinedAt: Date.now() });
-    socket.join(room);
-    socket.emit('join', { sessionToken, room, serverTs: Date.now() });
+  // 容量检查（非抢占式：满员直接拒绝，绝不踢人）
+  if (!capacityGuard.canJoin(room)) {
+    sendTo(conn, 'room_full', { code: 'ROOM_CAPACITY_EXCEEDED', message: '房间已满（50人上限）' });
+    return;
+  }
 
-    // 广播在线人数
-    io.to(room).emit('presence', { onlineCount: capacityGuard.getOnlineCount(room) });
+  const token = capacityGuard.join(room);
+  conn.room = room;
+  conn.sessionToken = token;
+  sessions.set(token, conn);
+  registerConn(conn);
+  sendTo(conn, 'join', { sessionToken: token, room, serverTs: Date.now() });
 
-    // 推送历史
-    const history = recordKeeper.getRecentMessages(room, 20);
-    history.forEach((m) => socket.emit(m.type, m));
-  });
+  broadcastRoom(room, 'presence', { onlineCount: capacityGuard.getOnlineCount(room) });
 
-  // ─── 离开 ──────────────────────────
-  socket.on('leave', () => {
-    if (currentRoom && sessionToken) {
-      capacityGuard.leave(currentRoom, sessionToken);
-      sessions.delete(sessionToken);
-      socket.leave(currentRoom);
-      io.to(currentRoom).emit('presence', { onlineCount: capacityGuard.getOnlineCount(currentRoom) });
+  const history = recordKeeper.getRecentMessages(room, 20);
+  history.forEach((m) => sendTo(conn, m.type, { ...m.payload, serverTs: m.serverTs }));
+}
+
+function leaveRoom(conn) {
+  const room = conn.room;
+  const token = conn.sessionToken;
+  if (room && token) {
+    capacityGuard.leave(room, token);
+    sessions.delete(token);
+    unregisterConn(conn);
+    broadcastRoom(room, 'presence', { onlineCount: capacityGuard.getOnlineCount(room) });
+  }
+  conn.room = null;
+  conn.sessionToken = null;
+}
+
+function handleShard(conn, msg) {
+  if (!conn.room) { sendTo(conn, 'error', { code: 'NOT_IN_ROOM' }); return; }
+  const { messageId, fragmentIndex, totalFragments, data, hint } = msg;
+  if (!messageId || fragmentIndex == null || !data) { sendTo(conn, 'error', { code: 'INVALID_SHARD' }); return; }
+  const drift = Math.floor(Math.random() * 300) + 50;
+  setTimeout(() => {
+    broadcastRoom(conn.room, 'shard', { messageId, fragmentIndex, totalFragments, data, hint: hint || 'text' });
+    shardBucket.addFragment(conn.room, messageId, fragmentIndex, totalFragments, data);
+    const assembled = shardBucket.tryAssemble(conn.room, messageId);
+    if (assembled) {
+      const assembledData = { messageId, text: assembled, hint: hint || 'text', serverTs: Date.now() };
+      broadcastRoom(conn.room, 'assembled', assembledData);
+      recordKeeper.store(conn.room, { type: 'assembled', room: conn.room, payload: assembledData, serverTs: assembledData.serverTs });
     }
-    currentRoom = null; sessionToken = null;
-  });
+  }, drift);
+}
 
-  // ─── 加密碎片 (momo) ───────────────
-  socket.on('shard', (msg) => {
-    if (!currentRoom) { socket.emit('error', { code: 'NOT_IN_ROOM' }); return; }
-    const { messageId, fragmentIndex, totalFragments, data, hint } = msg;
-    if (!messageId || fragmentIndex == null || !data) {
-      socket.emit('error', { code: 'INVALID_SHARD' }); return;
+function handleMessage(conn, msg) {
+  if (!conn.room) { sendTo(conn, 'error', { code: 'NOT_IN_ROOM' }); return; }
+  const p = msg.payload || msg; // 兼容旧格式：payload 存在则取其内容
+  const messageId = p.messageId;
+  const kind = p.kind || 'text';
+  const content = p.content;
+  if (!messageId || !content) { sendTo(conn, 'error', { code: 'INVALID_MESSAGE' }); return; }
+  const msgData = {
+    messageId, kind, content,
+    senderTag: p.senderTag || '',
+    displayName: p.displayName || '',
+    fileUrl: p.fileUrl,
+    thumbUrl: p.thumbUrl || '',
+    fileName: p.fileName,
+    fileSize: p.fileSize,
+    mimeType: p.mimeType,
+    serverTs: Date.now(),
+  };
+  broadcastRoom(conn.room, 'message', msgData);
+  if (kind === 'text') recordKeeper.store(conn.room, { type: 'message', room: conn.room, payload: msgData, serverTs: msgData.serverTs });
+}
+
+function handleReaction(conn, msg) {
+  if (!conn.room) return;
+  const { targetMessageId, reaction, senderTag } = msg;
+  broadcastRoom(conn.room, 'reaction', { targetMessageId, reaction, senderTag: senderTag || '' });
+}
+
+function handleExport(conn) {
+  if (!conn.room) return;
+  const content = recordKeeper.exportAsTxt(conn.room);
+  sendTo(conn, 'export', { content, filename: `changwo-${conn.room}-${Date.now()}.txt` });
+}
+
+function handlePing(conn) { sendTo(conn, 'pong', {}); }
+
+// ─── Socket.IO 通道 ────────────────────────────────
+
+io.on('connection', (socket) => {
+  const conn = { id: `io-${++connSeq}`, io: socket, ws: null, room: null, sessionToken: null };
+  console.log(`[connect] io ${socket.id}`);
+  socket.on('join', (msg) => handleJoin(conn, msg || {}));
+  socket.on('shard', (msg) => handleShard(conn, msg || {}));
+  socket.on('message', (msg) => handleMessage(conn, msg || {}));
+  socket.on('reaction', (msg) => handleReaction(conn, msg || {}));
+  socket.on('export', () => handleExport(conn));
+  socket.on('ping', () => handlePing(conn));
+  socket.on('leave', () => leaveRoom(conn));
+  socket.on('disconnect', () => { leaveRoom(conn); console.log(`[disconnect] io ${socket.id}`); });
+});
+
+// ─── 原生 WebSocket 通道（微信小程序）───────────────
+
+wss.on('connection', (ws) => {
+  const conn = { id: `ws-${++connSeq}`, io: null, ws, room: null, sessionToken: null };
+  console.log(`[connect] ws ${conn.id}`);
+  ws.on('message', (data) => {
+    let msg;
+    try { msg = JSON.parse(data.toString()); } catch { return; }
+    if (!msg || typeof msg !== 'object') return;
+    switch (msg.type) {
+      case 'join': handleJoin(conn, msg); break;
+      case 'shard': handleShard(conn, msg); break;
+      case 'message': handleMessage(conn, msg); break;
+      case 'reaction': handleReaction(conn, msg); break;
+      case 'export': handleExport(conn); break;
+      case 'ping': handlePing(conn); break;
+      case 'leave': leaveRoom(conn); break;
     }
-    const drift = Math.floor(Math.random() * 300) + 50;
-    setTimeout(() => {
-      socket.to(currentRoom).emit('shard', { messageId, fragmentIndex, totalFragments, data, hint: hint || 'text' });
-      socket.emit('shard', { messageId, fragmentIndex, totalFragments, data, hint: hint || 'text' });
-
-      shardBucket.addFragment(currentRoom, messageId, fragmentIndex, totalFragments, data);
-      const assembled = shardBucket.tryAssemble(currentRoom, messageId);
-      if (assembled) {
-        const assembledData = { messageId, text: assembled, hint: hint || 'text', serverTs: Date.now() };
-        io.to(currentRoom).emit('assembled', assembledData);
-        recordKeeper.store(currentRoom, { type: 'assembled', room: currentRoom, payload: assembledData, serverTs: assembledData.serverTs });
-      }
-    }, drift);
   });
-
-  // ─── 直传消息 (plain) ──────────────
-  socket.on('message', (msg) => {
-    if (!currentRoom) { socket.emit('error', { code: 'NOT_IN_ROOM' }); return; }
-    // 兼容旧格式：如果 payload 存在，从 payload 提取；否则直接从 msg 提取
-    const p = msg.payload || msg;
-    const messageId = p.messageId;
-    const kind = p.kind || 'text';
-    const content = p.content;
-    const senderTag = p.senderTag || '';
-    const fileUrl = p.fileUrl;
-    const thumbUrl = p.thumbUrl || '';
-    const fileName = p.fileName;
-    const fileSize = p.fileSize;
-    const mimeType = p.mimeType;
-    if (!messageId || !content) { socket.emit('error', { code: 'INVALID_MESSAGE' }); return; }
-    const msgData = { messageId, kind, content, senderTag, fileUrl, thumbUrl, fileName, fileSize, mimeType, serverTs: Date.now() };
-    io.to(currentRoom).emit('message', msgData);
-    if (kind === 'text') recordKeeper.store(currentRoom, { type: 'message', room: currentRoom, payload: msgData, serverTs: msgData.serverTs });
-  });
-
-  // ─── 表态 ──────────────────────────
-  socket.on('reaction', (msg) => {
-    if (!currentRoom) return;
-    const { targetMessageId, reaction, senderTag } = msg;
-    io.to(currentRoom).emit('reaction', { targetMessageId, reaction, senderTag: senderTag || '' });
-  });
-
-  // ─── 导出 ──────────────────────────
-  socket.on('export', () => {
-    if (!currentRoom) return;
-    const txtContent = recordKeeper.exportAsTxt(currentRoom);
-    socket.emit('export', { payload: { content: txtContent, filename: `changwo-${currentRoom}-${Date.now()}.txt` } });
-  });
-
-  // ─── 断开 ──────────────────────────
-  socket.on('disconnect', () => {
-    if (currentRoom && sessionToken) {
-      capacityGuard.leave(currentRoom, sessionToken);
-      sessions.delete(sessionToken);
-      io.to(currentRoom).emit('presence', { onlineCount: capacityGuard.getOnlineCount(currentRoom) });
-    }
-    console.log(`[disconnect] ${socket.id} room=${currentRoom}`);
-  });
+  ws.on('close', () => { leaveRoom(conn); console.log(`[disconnect] ws ${conn.id}`); });
+  ws.on('error', () => {});
 });
 
 // ─── 启动 ────────────────────────────────────────

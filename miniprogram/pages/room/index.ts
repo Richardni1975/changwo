@@ -66,7 +66,7 @@ Page<PageData, {}>({
   // ─── WebSocket ─────────────────────────────
 
   _connectWs(roomId: string) {
-    const wsUrl = 'wss://api-mosaic.m0m0n1.top/ws';
+    const wsUrl = 'wss://changwo.m0m0n1.top/ws';
 
     this._wsClient = new WsClient({
       url: wsUrl,
@@ -74,33 +74,36 @@ Page<PageData, {}>({
       onMessage: (msg) => {
         switch (msg.type) {
           case 'shard': {
-            const { messageId, fragmentIndex, totalFragments, data } = msg.payload;
-            // 客户端本地合体（不经过服务端）
-            const plaintext = assembleShards(
-              Array.from({ length: totalFragments }, (_, i) =>
-                i === fragmentIndex ? data : ''
-              )
-            );
-
-            // 简化处理：直接显示（生产环境需碎片桶收集后再合体）
-            if (plaintext && !this._assembledIds.has(messageId)) {
-              this._assembledIds.add(messageId);
-              this._addMessage(messageId, plaintext, msg.serverTs || Date.now(), 'ready');
+            const { messageId } = msg.payload as any;
+            // 显示收集态占位；明文等服务端集齐后下发 assembled 再合体
+            if (!this._assembledIds.has(messageId) && !this.data.messages.some((m) => m.id === messageId)) {
+              this._addMessage(messageId, '', msg.serverTs || Date.now(), 'collecting');
             }
             break;
           }
 
           case 'assembled': {
-            const { messageId, text } = msg.payload;
-            if (!this._assembledIds.has(messageId)) {
-              this._assembledIds.add(messageId);
-              this._addMessage(messageId, text, msg.serverTs || Date.now(), 'ready');
+            const { messageId, text } = msg.payload as any;
+            if (this._assembledIds.has(messageId)) break;
+            this._assembledIds.add(messageId);
+            let plaintext = text as string;
+            try {
+              const frags = plaintext.split('|');
+              if (frags.length >= 4) plaintext = assembleShards(frags);
+            } catch {}
+            const idx = this.data.messages.findIndex((m) => m.id === messageId);
+            if (idx >= 0) {
+              const messages = this.data.messages.slice();
+              messages[idx] = { ...messages[idx], text: plaintext, status: 'ready' as const };
+              this.setData({ messages });
+            } else {
+              this._addMessage(messageId, plaintext, msg.serverTs || Date.now(), 'ready');
             }
             break;
           }
 
           case 'presence':
-            this.setData({ onlineCount: msg.payload?.onlineCount || 0 });
+            this.setData({ onlineCount: Number(msg.payload?.onlineCount) || 0 });
             break;
 
           case 'room_full':
@@ -169,7 +172,11 @@ Page<PageData, {}>({
         this._wsClient?.send({
           type: 'shard',
           room: this.data.roomId,
-          payload: { messageId, fragmentIndex: index, totalFragments: 4, data },
+          messageId,
+          fragmentIndex: index,
+          totalFragments: 4,
+          data,
+          hint: 'text',
         });
       }, drift);
     });
