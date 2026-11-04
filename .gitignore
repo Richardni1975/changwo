@@ -11,6 +11,9 @@ miniprogram/miniprogram_npm/
 # Server runtime
 server/uploads/
 
+# 知识库（课程书籍内容 + 生成的索引，不入库）
+server/knowledge/*/
+
 # Environment
 .env
 .env.local

@@ -22,7 +22,11 @@ export function CreateRoom({ onCreated }: CreateRoomProps) {
 
   const handleCreate = () => {
     setCreating(true);
-    setTimeout(() => { onCreated(genRoomCode()); setCreating(false); }, 300);
+    const code = genRoomCode();
+    // 生成老师身份密钥（hostKey），存入本地——本设备即可识别为老师
+    const hostKey = crypto.randomUUID();
+    try { localStorage.setItem(`changwo_hostKey_${code}`, hostKey); } catch {}
+    setTimeout(() => { onCreated(code); setCreating(false); }, 300);
   };
 
   const handleJoin = () => {
@@ -30,6 +34,13 @@ export function CreateRoom({ onCreated }: CreateRoomProps) {
     if (!code || code.length < 4) { setJoinError('请输入 4 位房间号'); return; }
     setJoinError('');
     setJoining(true);
+    // 固定房间号下：首个进入的人认领「老师」身份（与创建房间同理）。
+    // 本地若无该房间的 hostKey 则生成一个；已有则复用（重连仍为老师）。
+    try {
+      if (!localStorage.getItem(`changwo_hostKey_${code}`)) {
+        localStorage.setItem(`changwo_hostKey_${code}`, crypto.randomUUID());
+      }
+    } catch {}
     setTimeout(() => { onCreated(code); setJoining(false); }, 300);
   };
 
@@ -86,7 +97,7 @@ export function CreateRoom({ onCreated }: CreateRoomProps) {
       </div>
       {joinError && <p className="text-xs text-status-error mt-1.5">{joinError}</p>}
 
-      <p className="mt-6 text-[11px] text-text-muted">V1.0 &nbsp; 开发者：倪宁</p>
+      <p className="mt-6 text-[11px] text-text-muted">V2.0 &nbsp; 开发者：倪宁</p>
     </div>
   );
 }

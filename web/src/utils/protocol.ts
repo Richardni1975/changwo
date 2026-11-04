@@ -34,6 +34,11 @@ export enum MessageType {
   RECONNECT = 'reconnect',
   EXPORT = 'export',
 
+  // 隐蔽助教（2.0）
+  BOT_CONTROL = 'bot_control',   // 老师 → 服务端：开关机器人/知识库
+  BOT_CONFIG = 'bot_config',     // 服务端 → 老师：当前配置
+  TOPIC = 'topic',               // 老师 → 全房间：发起议题
+
   // AI 扩展
   AI_SUMMARY = 'ai_summary',
   AI_POLL = 'ai_poll',
@@ -88,4 +93,16 @@ export interface ErrorPayload {
 export interface ExportPayload {
   content: string;
   filename: string;
+}
+
+/** 隐蔽助教：机器人配置（仅老师可见） */
+export interface BotConfigPayload {
+  botEnabled: boolean;
+  kbEnabled: boolean;
+  kbId: string | null;
+  courses: string[];
+}
+
+export interface TopicPayload {
+  text: string;
 }

@@ -13,6 +13,7 @@ export interface WsClientOptions {
   room: string;
   sessionToken?: string;
   lastMsgServerTs?: number;
+  hostKey?: string;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onEvent: (type: string, payload: Record<string, unknown>) => void;
@@ -49,6 +50,7 @@ export class WsClient {
         room: this.opts.room,
         sessionToken: this.opts.sessionToken || undefined,
         lastMsgServerTs: this.opts.lastMsgServerTs,
+        hostKey: this.opts.hostKey || undefined,
       });
 
       // 清空待发队列
@@ -72,7 +74,7 @@ export class WsClient {
 
     // 所有消息事件统一处理
     const eventTypes = ['join', 'shard', 'assembled', 'message', 'reaction',
-      'presence', 'export', 'room_full', 'error', 'pong'];
+      'presence', 'export', 'room_full', 'error', 'pong', 'topic', 'bot_config'];
     for (const type of eventTypes) {
       this.socket.on(type, (payload: Record<string, unknown>) => {
         console.log('[ws-client] ←', type, typeof payload === 'object' ? JSON.stringify(payload).slice(0, 80) : '');

@@ -24,6 +24,7 @@ interface DisplayMessage {
   displayName: string;
   thumbsUp: number;     // 赞数
   thumbsDown: number;   // 踩数
+  isBot?: boolean;      // 是否助教机器人发言（仅老师可见标记）
 }
 
 type ChatMode = 'momo' | 'plain';
@@ -106,6 +107,16 @@ export function Room({ roomId, onBack }: RoomProps) {
   const [filePanel, setFilePanel] = useState<{ url: string; name: string } | null>(null);
   const [myName, setMyName] = useState<string>(() => { try { return localStorage.getItem('changwo_displayName') || ''; } catch { return ''; } });
   const [showNameInput, setShowNameInput] = useState(false);
+  // ─── 隐蔽助教：老师身份 & 配置 ──────────────
+  const [isHost, setIsHost] = useState(false);
+  const [botConfig, setBotConfig] = useState<{ botEnabled: boolean; kbEnabled: boolean; kbId: string | null; courses: string[] }>({ botEnabled: false, kbEnabled: false, kbId: null, courses: [] });
+  const [showBotPanel, setShowBotPanel] = useState(false);
+  const [currentTopic, setCurrentTopic] = useState<string | null>(null);
+  const [topicDraft, setTopicDraft] = useState('');
+  // 本设备创建房间时生成的 hostKey（存于 localStorage），用于服务端识别老师
+  const [hostKey] = useState<string | undefined>(() => {
+    try { return localStorage.getItem(`changwo_hostKey_${roomId}`) || undefined; } catch { return undefined; }
+  });
 
   const msgListRef = useRef<HTMLDivElement>(null);
   // 本设备已表态的消息：messageId → 'up' | 'down'（每消息只能点一次）
@@ -148,6 +159,22 @@ export function Room({ roomId, onBack }: RoomProps) {
     const assembledIds = assembledIdsRef.current;
 
     switch (msg.type) {
+      // ── 隐蔽助教：老师身份 & 配置 ──
+      case 'join': {
+        const p = msg.payload as any;
+        if (p?.isHost) { setIsHost(true); if (p.botConfig) setBotConfig(p.botConfig); }
+        break;
+      }
+      case 'bot_config': {
+        setBotConfig((msg.payload as any) || {});
+        break;
+      }
+      case 'topic': {
+        const t = ((msg.payload as any)?.text) || '';
+        if (t) setCurrentTopic(t);
+        break;
+      }
+
       // ── momo 碎片（匿名模式，永远 momo）──
       case 'shard': {
         const { messageId, fragmentIndex, totalFragments, data } = msg.payload as unknown as ShardPayload;
@@ -190,6 +217,7 @@ export function Room({ roomId, onBack }: RoomProps) {
         setMessages((prev) => [...prev.filter((m) => m.id !== messageId), {
           id: messageId, text: displayText, serverTs: msg.serverTs || Date.now(),
           status: 'ready', kind, displayName: 'momo', thumbsUp: 0, thumbsDown: 0,
+          isBot: !!((msg.payload as any)?.fromBot),
         }]);
         break;
       }
@@ -257,7 +285,7 @@ export function Room({ roomId, onBack }: RoomProps) {
   // ─── WebSocket ──────────────────────────────
 
   const { connected, send } = useWebSocket({
-    url: WS_URL, room: roomId, onMessage: handleMessage,
+    url: WS_URL, room: roomId, hostKey, onMessage: handleMessage,
     onPresence: updatePresence, onRoomFull: () => setRoomFull(true),
   });
   sendRef.current = send;
@@ -310,6 +338,19 @@ export function Room({ roomId, onBack }: RoomProps) {
     a.href = url; a.download = `changwo-${roomId.slice(0, 8)}-${Date.now()}.txt`; a.click();
     URL.revokeObjectURL(url);
     setExporting(false);
+  };
+
+  // ─── 隐蔽助教控制（仅老师）──────────────
+  const sendBotControl = (patch: { botEnabled?: boolean; kbEnabled?: boolean; kbId?: string | null }) => {
+    send('bot_control', patch);
+  };
+
+  const handleSendTopic = () => {
+    const t = topicDraft.trim();
+    if (!t) return;
+    send('topic', { text: t });
+    setTopicDraft('');
+    setCurrentTopic(t);
   };
 
   const sendReaction = (targetMessageId: string, reaction: 'up' | 'down') => {
@@ -452,6 +493,11 @@ export function Room({ roomId, onBack }: RoomProps) {
             title={myName ? `署名：${myName}（仅直传模式显示）` : '输入真实名字（仅直传模式显示）'}>
             {myName ? `✏️ ${myName}` : '✏️ 署名'}
           </button>
+          {isHost && (
+            <button onClick={() => setShowBotPanel(v => !v)}
+              className={`text-xs px-2 py-1 rounded transition-colors ${showBotPanel ? 'bg-brand-primary/20 text-brand-primary' : 'text-text-muted hover:text-text-secondary'}`}
+              title="助教机器人设置（仅老师可见）">🤖</button>
+          )}
           <button onClick={() => setShowQr(true)} className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-secondary" title="二维码">📱</button>
           <button onClick={() => setShowLeaderboard(!showLeaderboard)}
             className={`text-xs px-2 py-1 rounded transition-colors ${showLeaderboard ? 'bg-amber-500/20 text-amber-300' : 'text-text-muted hover:text-text-secondary'}`}>🏆</button>
@@ -497,6 +543,49 @@ export function Room({ roomId, onBack }: RoomProps) {
         </div>
       )}
 
+      {/* 隐蔽助教面板（仅老师可见） */}
+      {isHost && showBotPanel && (
+        <div className="shrink-0 px-4 py-3 border-b border-white/5 bg-surface-alt space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-brand-primary">🤖 助教机器人 <span className="text-text-muted font-normal">（仅老师可见）</span></span>
+            <button onClick={() => setShowBotPanel(false)} className="text-xs text-text-muted hover:text-text-secondary">✕</button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => sendBotControl({ botEnabled: !botConfig.botEnabled })}
+              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${botConfig.botEnabled ? 'border-brand-primary/40 text-brand-primary bg-brand-primary/10' : 'border-white/10 text-text-muted hover:text-text-secondary'}`}>
+              {botConfig.botEnabled ? '🟢 机器人已开' : '⚪ 机器人已关'}
+            </button>
+            <button onClick={() => sendBotControl({ kbEnabled: !botConfig.kbEnabled })}
+              disabled={!botConfig.botEnabled}
+              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${botConfig.kbEnabled ? 'border-amber-500/40 text-amber-300 bg-amber-500/10' : 'border-white/10 text-text-muted hover:text-text-secondary'} disabled:opacity-30 disabled:cursor-not-allowed`}>
+              {botConfig.kbEnabled ? '📚 知识库已开' : '📚 知识库已关'}
+            </button>
+            <select value={botConfig.kbId || ''}
+              onChange={(e) => sendBotControl({ kbId: e.target.value || null })}
+              disabled={!botConfig.botEnabled || !botConfig.kbEnabled}
+              className="text-xs px-2 py-1.5 rounded-lg bg-surface-card border border-white/10 text-text-primary focus:outline-none disabled:opacity-30">
+              <option value="">选择课程知识库</option>
+              {botConfig.courses.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-1.5">
+            <input type="text" value={topicDraft} onChange={(e) => setTopicDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendTopic()}
+              placeholder="发起议题：输入本次讨论主题"
+              className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-surface-card border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary/50" />
+            <button onClick={handleSendTopic} disabled={!topicDraft.trim()}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-medium transition-all disabled:opacity-30 active:scale-95">📢 发起议题</button>
+          </div>
+        </div>
+      )}
+
+      {/* 当前议题横幅 */}
+      {currentTopic && (
+        <div className="shrink-0 px-4 py-2 border-b border-white/5 bg-amber-500/5">
+          <p className="text-sm"><span className="text-amber-300">📢 议题：</span><span className="text-text-primary">{currentTopic}</span></p>
+        </div>
+      )}
+
       {/* 消息列表 */}
       <div ref={msgListRef} className="flex-1 overflow-y-auto px-4 py-2" style={{ minHeight: '200px' }}>
         {messages.length === 0 && <div className="flex items-center justify-center h-full"><p className="text-sm text-text-muted">暂无消息 ✨</p></div>}
@@ -511,6 +600,7 @@ export function Room({ roomId, onBack }: RoomProps) {
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className={`w-2 h-2 rounded-full ${c.dot} shrink-0`} />
                     <span className="text-[10px] text-text-muted">{msg.displayName}</span>
+                    {msg.isBot && isHost && <span className="text-[10px] text-text-muted" title="助教机器人发言">🤖</span>}
                     <span className="text-[10px] text-text-muted ml-auto">{new Date(msg.serverTs).toLocaleTimeString('zh-CN')}</span>
                   </div>
                   {msg.kind === 'image' ? (

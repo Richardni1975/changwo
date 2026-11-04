@@ -5,12 +5,13 @@ import type { WireMessage } from '../utils/protocol';
 interface UseWebSocketOptions {
   url: string;
   room: string;
+  hostKey?: string;
   onMessage: (msg: WireMessage) => void;
   onPresence?: (count: number) => void;
   onRoomFull?: () => void;
 }
 
-export function useWebSocket({ url, room, onMessage, onPresence, onRoomFull }: UseWebSocketOptions) {
+export function useWebSocket({ url, room, hostKey, onMessage, onPresence, onRoomFull }: UseWebSocketOptions) {
   const clientRef = useRef<WsClient | null>(null);
   const [connected, setConnected] = useState(false);
   const onMessageRef = useRef(onMessage);
@@ -24,6 +25,7 @@ export function useWebSocket({ url, room, onMessage, onPresence, onRoomFull }: U
     const client = new WsClient({
       url,
       room,
+      hostKey,
       onConnect: () => setConnected(true),
       onDisconnect: () => setConnected(false),
       onEvent: (type, payload) => {
@@ -39,7 +41,7 @@ export function useWebSocket({ url, room, onMessage, onPresence, onRoomFull }: U
     client.connect();
     clientRef.current = client;
     return () => { client.destroy(); clientRef.current = null; setConnected(false); };
-  }, [url, room]);
+  }, [url, room, hostKey]);
 
   const send = useCallback((type: string, data: Record<string, unknown> = {}) => {
     clientRef.current?.send(type, data);

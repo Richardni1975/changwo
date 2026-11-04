@@ -20,6 +20,10 @@ const { createShardBucket } = require('./shard-bucket');
 const { createRecordKeeper } = require('./record-keeper');
 const { saveFile, getFile } = require('./file-store');
 const { WebSocketServer, WebSocket } = require('ws');
+const { v4: uuidv4 } = require('uuid');
+const { decodeAssembled, encodeShards } = require('./plaintext');
+const { createKbStore } = require('./kb-retriever');
+const { createBot } = require('./bot');
 
 const PORT = process.env.PORT || 8080;
 const PROD = process.env.NODE_ENV === 'production';
@@ -32,6 +36,24 @@ const recordKeeper = createRecordKeeper({ retentionHours: 168 });
 
 // 每 60 秒清理超时未集齐的碎片桶
 setInterval(() => shardBucket.cleanStale(30_000), 60_000);
+
+// ─── 隐蔽助教机器人（独立模块，非侵入）────────────
+const kbStore = createKbStore(path.join(__dirname, 'knowledge'));
+const bot = createBot({
+  retrieve: kbStore.retrieve,
+  listCourses: kbStore.listCourses,
+  inject: injectBotMessage,
+});
+
+// 机器人发言走同一条 assembled 通道：同样 XOR 分片成 4 片广播，
+// 客户端完全无感（看起来就是普通 momo），仅多一个 fromBot 标记供老师识别。
+function injectBotMessage(room, text) {
+  const messageId = uuidv4();
+  const shards = encodeShards(text, 4);
+  const assembledData = { messageId, text: shards.join('|'), hint: 'text', fromBot: true, serverTs: Date.now() };
+  broadcastRoom(room, 'assembled', assembledData);
+  recordKeeper.store(room, { type: 'assembled', room, payload: assembledData, serverTs: assembledData.serverTs });
+}
 
 // ─── HTTP 服务器 ──────────────────────────────────
 
@@ -170,6 +192,9 @@ function handleJoin(conn, msg) {
   const room = msg.room;
   if (!room) { sendTo(conn, 'error', { code: 'MISSING_ROOM' }); return; }
 
+  conn.hostKey = msg.hostKey || null;
+  const isHost = bot.claimHost(room, msg.hostKey);
+
   // 重连：同一 sessionToken + 同一房间 → 复用既有槽位
   if (msg.sessionToken && sessions.has(msg.sessionToken)) {
     const old = sessions.get(msg.sessionToken);
@@ -180,7 +205,7 @@ function handleJoin(conn, msg) {
       conn.sessionToken = msg.sessionToken;
       sessions.set(msg.sessionToken, conn);
       registerConn(conn);
-      sendTo(conn, 'join', { sessionToken: msg.sessionToken, room, serverTs: Date.now() });
+      sendTo(conn, 'join', { sessionToken: msg.sessionToken, room, serverTs: Date.now(), isHost, ...(isHost ? { botConfig: bot.config(room) } : {}) });
       const missed = recordKeeper.getMessagesSince(room, msg.lastMsgServerTs || 0);
       missed.forEach((m) => sendTo(conn, m.type, { ...m.payload, serverTs: m.serverTs }));
       return;
@@ -198,7 +223,7 @@ function handleJoin(conn, msg) {
   conn.sessionToken = token;
   sessions.set(token, conn);
   registerConn(conn);
-  sendTo(conn, 'join', { sessionToken: token, room, serverTs: Date.now() });
+  sendTo(conn, 'join', { sessionToken: token, room, serverTs: Date.now(), isHost, ...(isHost ? { botConfig: bot.config(room) } : {}) });
 
   broadcastRoom(room, 'presence', { onlineCount: capacityGuard.getOnlineCount(room) });
 
@@ -223,15 +248,20 @@ function handleShard(conn, msg) {
   if (!conn.room) { sendTo(conn, 'error', { code: 'NOT_IN_ROOM' }); return; }
   const { messageId, fragmentIndex, totalFragments, data, hint } = msg;
   if (!messageId || fragmentIndex == null || !data) { sendTo(conn, 'error', { code: 'INVALID_SHARD' }); return; }
+  const h = hint || 'text';
   const drift = Math.floor(Math.random() * 300) + 50;
   setTimeout(() => {
-    broadcastRoom(conn.room, 'shard', { messageId, fragmentIndex, totalFragments, data, hint: hint || 'text' });
+    broadcastRoom(conn.room, 'shard', { messageId, fragmentIndex, totalFragments, data, hint: h });
     shardBucket.addFragment(conn.room, messageId, fragmentIndex, totalFragments, data);
     const assembled = shardBucket.tryAssemble(conn.room, messageId);
     if (assembled) {
-      const assembledData = { messageId, text: assembled, hint: hint || 'text', serverTs: Date.now() };
+      const assembledData = { messageId, text: assembled, hint: h, serverTs: Date.now() };
       broadcastRoom(conn.room, 'assembled', assembledData);
       recordKeeper.store(conn.room, { type: 'assembled', room: conn.room, payload: assembledData, serverTs: assembledData.serverTs });
+      if (h === 'text') {
+        const plaintext = decodeAssembled(assembled);
+        if (plaintext) bot.onUserMessage(conn.room, plaintext);
+      }
     }
   }, drift);
 }
@@ -255,7 +285,10 @@ function handleMessage(conn, msg) {
     serverTs: Date.now(),
   };
   broadcastRoom(conn.room, 'message', msgData);
-  if (kind === 'text') recordKeeper.store(conn.room, { type: 'message', room: conn.room, payload: msgData, serverTs: msgData.serverTs });
+  if (kind === 'text') {
+    recordKeeper.store(conn.room, { type: 'message', room: conn.room, payload: msgData, serverTs: msgData.serverTs });
+    bot.onUserMessage(conn.room, content);
+  }
 }
 
 function handleReaction(conn, msg) {
@@ -272,6 +305,24 @@ function handleExport(conn) {
 
 function handlePing(conn) { sendTo(conn, 'pong', {}); }
 
+// ─── 隐蔽助教：老师专属控制 ─────────────────────
+
+function handleBotControl(conn, msg) {
+  if (!conn.room) return;
+  if (!bot.isHost(conn.room, conn.hostKey)) { sendTo(conn, 'error', { code: 'NOT_HOST' }); return; }
+  const config = bot.setConfig(conn.room, { botEnabled: msg.botEnabled, kbEnabled: msg.kbEnabled, kbId: msg.kbId });
+  sendTo(conn, 'bot_config', config);
+}
+
+function handleTopic(conn, msg) {
+  if (!conn.room) return;
+  if (!bot.isHost(conn.room, conn.hostKey)) { sendTo(conn, 'error', { code: 'NOT_HOST' }); return; }
+  const text = String(msg.text || (msg.payload && msg.payload.text) || '').trim();
+  if (!text) return;
+  broadcastRoom(conn.room, 'topic', { text, serverTs: Date.now() });
+  bot.onTopic(conn.room, text);
+}
+
 // ─── Socket.IO 通道 ────────────────────────────────
 
 io.on('connection', (socket) => {
@@ -283,6 +334,8 @@ io.on('connection', (socket) => {
   socket.on('reaction', (msg) => handleReaction(conn, msg || {}));
   socket.on('export', () => handleExport(conn));
   socket.on('ping', () => handlePing(conn));
+  socket.on('bot_control', (msg) => handleBotControl(conn, msg || {}));
+  socket.on('topic', (msg) => handleTopic(conn, msg || {}));
   socket.on('leave', () => leaveRoom(conn));
   socket.on('disconnect', () => { leaveRoom(conn); console.log(`[disconnect] io ${socket.id}`); });
 });
@@ -303,6 +356,8 @@ wss.on('connection', (ws) => {
       case 'reaction': handleReaction(conn, msg); break;
       case 'export': handleExport(conn); break;
       case 'ping': handlePing(conn); break;
+      case 'bot_control': handleBotControl(conn, msg); break;
+      case 'topic': handleTopic(conn, msg); break;
       case 'leave': leaveRoom(conn); break;
     }
   });
