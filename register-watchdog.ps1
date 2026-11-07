@@ -1,7 +1,7 @@
 $root = $PSScriptRoot
-$ps = Join-Path $root 'start-production.ps1'
-# 路径含中文但无空格，不加内层引号，避免 PS5.1 原生参数内嵌引号 bug
-$tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ' + $ps
+$vbs = Join-Path $root 'watchdog-hidden.vbs'
+# wscript.exe has no console window -> no blue flash. Path has no spaces, no inner quotes.
+$tr = 'wscript.exe ' + $vbs
 
 # 先删掉占位任务
 schtasks.exe /delete /tn "ChangWoWatchdog" /f 2>$null | Out-Null

@@ -29,9 +29,8 @@ if (-not $tunnel) {
 # 3) register watchdog task (one-time; skip if exists)
 $taskName = 'ChangWoWatchdog'
 if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
-    $ps = Join-Path $root 'start-production.ps1'
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-        -Argument ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $ps + '"')
+    $vbs = Join-Path $root 'watchdog-hidden.vbs'
+    $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbs + '"')
     $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
         -LogonType Interactive -RunLevel Limited
     $t1 = New-ScheduledTaskTrigger -AtLogOn
